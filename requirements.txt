@@ -1,0 +1,35 @@
+# ── Core LLM & Agent Framework ──────────────────────────────────────────────
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-ollama==0.3.3
+langchain-chroma==0.2.4
+langgraph==0.5.4
+
+# ── Local Inference ──────────────────────────────────────────────────────────
+ollama==0.5.1
+
+# ── Vector Database ──────────────────────────────────────────────────────────
+chromadb==1.0.15
+
+# ── Obsidian / Markdown Parsing ──────────────────────────────────────────────
+python-frontmatter==1.1.0
+markdown==3.8.2
+
+# ── File Watching (real-time vault sync) ─────────────────────────────────────
+watchdog==6.0.0
+
+# ── Git Integration (backup & revert) ────────────────────────────────────────
+gitpython==3.1.44
+
+# ── Image Handling (multimodal) ───────────────────────────────────────────────
+pillow==11.3.0
+
+# ── Web UI ───────────────────────────────────────────────────────────────────
+gradio==5.38.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.1.1
+rich==14.0.0
+typer==0.16.0
+pydantic==2.11.7
+httpx==0.28.1
