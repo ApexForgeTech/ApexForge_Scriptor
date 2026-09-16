@@ -40,6 +40,10 @@ class Settings:
     memory_window: int = int(os.getenv("MEMORY_WINDOW", "10"))
     agent_memory_folder: str = os.getenv("AGENT_MEMORY_FOLDER", "Agent/Memory")
 
+    # ── Local time ──────────────────────────────────────────────────────────
+    # IANA timezone name used for date-sensitive questions such as "today".
+    timezone: str = os.getenv("TIMEZONE", "Asia/Baku")
+
     # ── Permissions ───────────────────────────────────────────────────────────
     write_permission: str = os.getenv("WRITE_PERMISSION", "ask")  # ask | allow | deny
 
@@ -58,6 +62,11 @@ class Settings:
             raise ValueError(
                 f"WRITE_PERMISSION must be 'ask', 'allow', or 'deny'. Got: {self.write_permission}"
             )
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(self.timezone)
+        except Exception as exc:
+            raise ValueError(f"TIMEZONE must be a valid IANA timezone. Got: {self.timezone}") from exc
         # Ensure output directories exist
         self.chroma_persist_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +80,7 @@ class Settings:
             f"  ollama_base_url  = {self.ollama_base_url}\n"
             f"  chroma_dir       = {self.chroma_persist_dir}\n"
             f"  retrieval_top_k  = {self.retrieval_top_k}\n"
+            f"  timezone         = {self.timezone}\n"
             f"  write_permission = {self.write_permission}\n"
             f")"
         )

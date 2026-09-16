@@ -15,7 +15,6 @@ Flow:
 from __future__ import annotations
 
 import sys
-import time
 import hashlib
 from pathlib import Path
 from typing import Optional
@@ -85,6 +84,19 @@ def _get_existing_hashes(collection: chromadb.Collection) -> dict[str, str]:
         return {}
 
 
+def _delete_stale_chunks(collection: chromadb.Collection, current_ids: set[str]) -> int:
+    """Remove vectors whose source chunks no longer exist in the vault."""
+    try:
+        stored_ids = set(collection.get(include=[])["ids"])
+        stale_ids = list(stored_ids - current_ids)
+        if stale_ids:
+            collection.delete(ids=stale_ids)
+        return len(stale_ids)
+    except Exception as exc:
+        console.print(f"[yellow]⚠ Could not clean stale index chunks: {exc}[/yellow]")
+        return 0
+
+
 # ── Main ingest function ──────────────────────────────────────────────────────
 
 def ingest_vault(
@@ -109,8 +121,7 @@ def ingest_vault(
     # ── Step 1: Parse vault ───────────────────────────────────────────────────
     docs = parse_vault(vault_path, verbose=True)
     if not docs:
-        console.print("[red]No documents found. Check VAULT_PATH in .env[/red]")
-        return {}
+        console.print("[yellow]No non-empty documents found in vault.[/yellow]")
 
     # ── Step 2: Chunk ─────────────────────────────────────────────────────────
     console.print(f"\n[cyan]Chunking {len(docs)} notes...[/cyan]")
@@ -130,6 +141,10 @@ def ingest_vault(
     collection = _get_collection(client)
     existing_hashes = _get_existing_hashes(collection)
 
+    # Notes may have been deleted or shortened since the last run. Remove
+    # their obsolete vectors before searching or reporting the final count.
+    deleted = _delete_stale_chunks(collection, {chunk.chunk_id for chunk in chunks})
+
     # ── Step 4: Filter — only embed what changed ───────────────────────────────
     new_chunks: list[DocumentChunk] = []
     skipped = 0
@@ -144,10 +159,14 @@ def ingest_vault(
     console.print(f"\n[cyan]Embedding delta:[/cyan]")
     console.print(f"  ⏭  Skipped (unchanged): {skipped}")
     console.print(f"  🆕 To embed:            {len(new_chunks)}")
+    console.print(f"  🗑️  Removed (stale):     {deleted}")
 
     if not new_chunks:
         console.print("\n[green]✓ Vault index is already up to date![/green]")
-        return {"total_chunks": len(chunks), "embedded": 0, "skipped": skipped}
+        return {
+            "total_chunks": len(chunks), "embedded": 0, "skipped": skipped,
+            "deleted": deleted, "collection_size": collection.count(),
+        }
 
     # ── Step 5: Embed in batches ──────────────────────────────────────────────
     embedded_count = 0
@@ -206,6 +225,7 @@ def ingest_vault(
     table.add_row("Total chunks", str(len(chunks)))
     table.add_row("Newly embedded", str(embedded_count))
     table.add_row("Skipped (cached)", str(skipped))
+    table.add_row("Removed (stale)", str(deleted))
     table.add_row("Errors", str(errors) if errors else "0 ✓")
     table.add_row("Total in ChromaDB", str(final_count))
     console.print("\n")
@@ -220,6 +240,7 @@ def ingest_vault(
         "total_chunks": len(chunks),
         "embedded": embedded_count,
         "skipped": skipped,
+        "deleted": deleted,
         "errors": errors,
         "collection_size": final_count,
     }

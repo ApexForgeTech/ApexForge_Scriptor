@@ -19,6 +19,16 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import settings
 from src.retrieval.search import search, SearchResult, build_context
+from src.tools.system_tools import now
+
+
+def _inside_vault(path: Path, vault: Path) -> bool:
+    """Return whether a resolved path remains inside the configured vault."""
+    try:
+        path.resolve().relative_to(vault.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 # ── ReadNoteTool ──────────────────────────────────────────────────────────────
@@ -33,7 +43,7 @@ def read_note(title_or_path: str) -> str:
 
     # Try exact path match first
     candidate = vault / title_or_path
-    if candidate.exists() and candidate.is_file():
+    if candidate.exists() and candidate.is_file() and _inside_vault(candidate, vault):
         return candidate.read_text(encoding="utf-8")
 
     # Search by title (case-insensitive filename match)
@@ -94,9 +104,9 @@ def get_daily_note(target_date: Optional[str] = None) -> str:
     Returns the note content or an error message.
     """
     if target_date is None or target_date.lower() == "today":
-        d = date.today()
+        d = now().date()
     elif target_date.lower() == "yesterday":
-        d = date.today() - timedelta(days=1)
+        d = now().date() - timedelta(days=1)
     else:
         try:
             d = datetime.strptime(target_date, "%Y-%m-%d").date()
@@ -104,8 +114,6 @@ def get_daily_note(target_date: Optional[str] = None) -> str:
             return f"❌ Invalid date format: '{target_date}'. Use YYYY-MM-DD."
 
     date_str = d.strftime("%Y-%m-%d")
-    month_name = d.strftime("%B").upper()
-
     # Search in Months folder
     vault = settings.vault_path
     candidates = list(vault.rglob(f"{date_str}.md"))

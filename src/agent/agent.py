@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Generator, Optional
 
@@ -35,6 +36,29 @@ from src.tools.read_tools import (
     list_notes,
 )
 from src.tools.write_tools import create_note, update_note, add_link
+from src.tools.system_tools import current_time
+
+
+def _is_direct_time_question(message: str) -> bool:
+    """Identify questions answerable from the local clock, not the vault."""
+    normalized = unicodedata.normalize("NFD", message.casefold())
+    text = "".join(
+        char for char in normalized if unicodedata.category(char) != "Mn"
+    )
+    text = " ".join(text.split())
+    exact_questions = {
+        "saat neçədir", "indi saat neçədir", "saat necədir", "indi saat necədir",
+        "saat necedir", "indi saat necedir",
+        "bu gün ayın neçəsidir", "bu gün ayin necesidir", "bugün ayın neçəsidir",
+        "bugun ayin necesidir", "bu gün hansı gündür", "bugun hansi gundur",
+        "what time is it", "what is the time", "what day is it", "what is today's date",
+    }
+    return text.rstrip("?!.") in exact_questions
+
+
+def _response_language(message: str) -> str:
+    """Use English only for clear English time questions; Azerbaijani is the default."""
+    return "en" if message.casefold().startswith(("what ", "what's ")) else "az"
 
 
 class ObsidianAgent:
@@ -75,6 +99,12 @@ class ObsidianAgent:
         Returns:
             AgentResponse with .answer and .sources_text.
         """
+        if _is_direct_time_question(message):
+            answer = current_time(_response_language(message))
+            self.memory.add("user", message)
+            self.memory.add("assistant", answer)
+            return AgentResponse(answer=answer, query=message)
+
         return self.rag.ask(
             query=message,
             note_type=note_type,
@@ -93,12 +123,19 @@ class ObsidianAgent:
         Stream the agent's response token by token.
         Yields string tokens. Returns AgentResponse when complete.
         """
-        return self.rag.ask_stream(
+        if _is_direct_time_question(message):
+            answer = current_time(_response_language(message))
+            self.memory.add("user", message)
+            self.memory.add("assistant", answer)
+            yield answer
+            return AgentResponse(answer=answer, query=message)
+
+        return (yield from self.rag.ask_stream(
             query=message,
             note_type=note_type,
             folder_subcategory=folder_subcategory,
             tag=tag,
-        )
+        ))
 
     # ── Vision ─────────────────────────────────────────────────────────────
 
@@ -124,6 +161,10 @@ class ObsidianAgent:
     def get_yesterday(self) -> str:
         """Get yesterday's daily note."""
         return get_daily_note("yesterday")
+
+    def get_current_time(self, language: str = "az") -> str:
+        """Return the local time, date, and weekday without calling the LLM."""
+        return current_time(language)
 
     def get_note(self, title: str) -> str:
         """Read a specific note by title."""

@@ -56,6 +56,7 @@ Open `.env` and at minimum set your Obsidian vault path:
 
 ```
 VAULT_PATH=/home/yourname/Documents/YourVaultName
+TIMEZONE=Asia/Baku
 ```
 
 ## Step 5: Run Connection Tests
@@ -84,7 +85,7 @@ cd -
 
 This is what enables the revert/undo system if the agent ever makes a change you don't like.
 
-## Step 7: Index Your Vault (Phase 2 — Coming Soon)
+## Step 7: Index Your Vault
 
 Once Phase 2 is implemented:
 
@@ -92,12 +93,20 @@ Once Phase 2 is implemented:
 python -m src.ingestion.embedder --vault $VAULT_PATH
 ```
 
-## Step 8: Launch the Agent (Phase 5 — Coming Soon)
+Optional, in a separate terminal, start continuous indexing while you edit notes:
+
+```bash
+python -m src.ingestion.watcher --vault $VAULT_PATH
+```
+
+## Step 8: Launch the Agent
 
 ```bash
 python -m src.ui.app
 # Opens a web UI at http://localhost:7860
 ```
+
+The agent can answer direct time/date questions using `TIMEZONE`; for example: `İndi saat neçədir?`.
 
 ---
 

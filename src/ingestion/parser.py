@@ -98,8 +98,8 @@ def _clean_markdown(text: str) -> str:
     text = _RE_HTML.sub("", text)
     # Remove checkbox markers but keep the task text
     text = _RE_CHECKBOX.sub("", text)
-    # Remove heading markers but keep text
-    text = _RE_HEADING.sub("", text)
+    # Keep Markdown headings.  The chunker uses them to preserve section
+    # boundaries, and the heading itself is useful semantic context.
     # Collapse multiple blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()

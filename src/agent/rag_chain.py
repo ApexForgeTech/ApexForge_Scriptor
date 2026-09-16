@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import settings
 from src.retrieval.search import search, SearchResult, build_context
 from src.agent.prompts import SYSTEM_PROMPT, RAG_PROMPT_TEMPLATE
+from src.tools.system_tools import temporal_context
 
 
 # ── Response model ────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ class RAGChain:
             question=query,
         )
 
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{temporal_context()}"}]
         messages.extend(self.memory.to_messages())
         messages.append({"role": "user", "content": user_content})
         return messages

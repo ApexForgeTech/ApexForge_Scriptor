@@ -9,12 +9,14 @@
 | Phase | Name                              | Status      | Estimated Effort |
 |-------|-----------------------------------|-------------|------------------|
 | 0     | Research & Scaffolding            | ✅ Done      | ~1 day           |
-| 1     | Infrastructure & Tooling          | 🔄 In Progress | ~2-3 days     |
-| 2     | Vault Ingestion & RAG Pipeline    | ⏳ Upcoming | ~3-4 days        |
-| 3     | Multimodal Brain & Memory         | ⏳ Upcoming | ~4-5 days        |
-| 4     | Agentic Write & Permission System | ⏳ Upcoming | ~3-4 days        |
-| 5     | Interface & UX Polish             | ⏳ Upcoming | ~3-5 days        |
+| 1     | Infrastructure & Tooling          | ✅ Implemented | ~2-3 days     |
+| 2     | Vault Ingestion & RAG Pipeline    | ✅ Implemented | ~3-4 days        |
+| 3     | Multimodal Brain & Memory         | 🟡 Core implemented | ~4-5 days        |
+| 4     | Agentic Write & Permission System | 🟡 CLI implemented | ~3-4 days        |
+| 5     | Interface & UX Polish             | 🟡 Core UI implemented | ~3-5 days        |
 | 6     | Advanced Features & Automation    | 🔭 Future   | Ongoing          |
+
+> **Implementation snapshot (2026-09):** The codebase is ahead of the original checklist. Parser, heading-aware chunking, Ollama embeddings, Chroma retrieval with stale-vector cleanup, a debounced vault watcher, RAG chat with session-window memory, vision analysis, CLI permission-gated writes, Git backup/restore, a Gradio UI, and a safe local time/date tool exist. The remaining priorities are durable session memory, real UI write approval, tests, and operational hardening.
 
 ---
 
@@ -44,7 +46,7 @@ This phase covers the initial discovery, requirements gathering, and basic proje
 ---
 
 ## 🔄 Phase 1 — Infrastructure & Tooling
-**Status: In Progress**
+**Status: Implemented**
 
 This phase sets up the development environment and confirms that all systems can communicate with each other before writing any real logic.
 
@@ -118,7 +120,7 @@ This phase sets up the development environment and confirms that all systems can
 ---
 
 ## ⏳ Phase 2 — Vault Ingestion & RAG Pipeline
-**Status: Upcoming**
+**Status: Implemented**
 
 This is the most critical phase. The agent needs to "read" and "understand" your entire Obsidian vault so it can answer questions based on your real notes.
 
@@ -175,7 +177,7 @@ This is the most critical phase. The agent needs to "read" and "understand" your
 ---
 
 ## ⏳ Phase 3 — Multimodal Brain & Memory
-**Status: Upcoming**
+**Status: Core implemented — durable memory remains**
 
 This phase connects the retrieval system with the language model and adds memory and image understanding.
 
@@ -231,7 +233,7 @@ This phase connects the retrieval system with the language model and adds memory
 ---
 
 ## ⏳ Phase 4 — Agentic Write & Permission System
-**Status: Upcoming**
+**Status: CLI implemented — UI approval remains**
 
 This phase gives the agent the ability to actively modify your vault — but only with your explicit approval and always with a safety net.
 
@@ -275,7 +277,7 @@ This phase gives the agent the ability to actively modify your vault — but onl
 ---
 
 ## ⏳ Phase 5 — Interface & UX Polish
-**Status: Upcoming**
+**Status: Core UI implemented — UX polish remains**
 
 Build a clean, easy-to-use interface so you don't have to work purely in the terminal.
 

@@ -23,6 +23,17 @@ from config import settings
 from src.tools.permission import request_permission
 
 
+def _resolve_vault_path(vault: Path, relative_path: str) -> Path:
+    """Resolve a user-provided path and reject any attempt to leave the vault."""
+    vault = vault.resolve()
+    resolved = (vault / relative_path).resolve()
+    try:
+        resolved.relative_to(vault)
+    except ValueError as exc:
+        raise ValueError("Path must stay inside the configured vault.") from exc
+    return resolved
+
+
 def _backup_before_write(action_label: str) -> bool:
     """Auto-commit vault state before any write. Returns True on success."""
     try:
@@ -57,7 +68,10 @@ def create_note(
         Success or error message string.
     """
     vault = settings.vault_path
-    target_folder = vault / folder if folder else vault
+    try:
+        target_folder = _resolve_vault_path(vault, folder or ".")
+    except ValueError as exc:
+        return f"❌ Invalid target folder: {exc}"
     safe_title = title.replace("/", "-").replace("\\", "-").strip()
     file_path = target_folder / f"{safe_title}.md"
 
