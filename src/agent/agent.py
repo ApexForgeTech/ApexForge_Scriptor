@@ -139,7 +139,7 @@ class ObsidianAgent:
 
     # ── Vision ─────────────────────────────────────────────────────────────
 
-    def chat_with_image(self, image_path: str, question: str) -> str:
+    def chat_with_image(self, image_path: str, question: str):
         """
         Analyse an image with vault context from RAG.
 
@@ -147,10 +147,10 @@ class ObsidianAgent:
             image_path: Absolute path to image file.
             question:   User's question about the image.
 
-        Returns:
-            Model's analysis as a string.
+        Yields:
+            Model tokens as strings (streaming).
         """
-        return analyze_image_with_rag(image_path, question, top_k=3)
+        yield from analyze_image_with_rag(image_path, question, top_k=3)
 
     # ── Read shortcuts ──────────────────────────────────────────────────────
 

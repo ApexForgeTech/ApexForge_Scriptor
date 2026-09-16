@@ -83,7 +83,7 @@ def analyze_image(
     payload = {
         "model": settings.llm_model,
         "messages": messages,
-        "stream": False,
+        "stream": True,
         "options": {
             "temperature": 0.2,
             "num_predict": 1024,
@@ -91,17 +91,30 @@ def analyze_image(
     }
 
     try:
-        resp = httpx.post(
+        with httpx.stream(
+            "POST",
             f"{settings.ollama_base_url}/api/chat",
             json=payload,
-            timeout=180,  # Vision models take longer
-        )
-        resp.raise_for_status()
-        return resp.json()["message"]["content"].strip()
+            timeout=180,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                import json as _json
+                try:
+                    chunk = _json.loads(line)
+                except ValueError:
+                    continue
+                token = chunk.get("message", {}).get("content", "")
+                if token:
+                    yield token
+                if chunk.get("done"):
+                    break
     except httpx.HTTPStatusError as exc:
-        return f"❌ Vision API error: {exc.response.status_code} — {exc.response.text[:200]}"
+        yield f"\u274c Vision API error: {exc.response.status_code} \u2014 {exc.response.text[:200]}"
     except Exception as exc:
-        return f"❌ Vision request failed: {exc}"
+        yield f"\u274c Vision request failed: {exc}"
 
 
 def analyze_image_with_rag(
@@ -117,8 +130,8 @@ def analyze_image_with_rag(
         question:   The user's question.
         top_k:      Number of vault chunks to retrieve for context.
 
-    Returns:
-        The model's response string.
+    Yields:
+        Tokens from the model response (streaming).
     """
     from src.retrieval.search import search, build_context
 
@@ -126,4 +139,5 @@ def analyze_image_with_rag(
     sources = search(question, top_k=top_k)
     vault_context = build_context(sources) if sources else ""
 
-    return analyze_image(image_path, question, vault_context)
+    yield from analyze_image(image_path, question, vault_context)
+

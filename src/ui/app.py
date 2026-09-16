@@ -101,16 +101,50 @@ def clear_chat() -> tuple[list, str]:
 
 # ── Image tab functions ───────────────────────────────────────────────────────
 
-def analyze_image(image_path: str | None, question: str) -> str:
-    """Analyse an uploaded image with optional vault context."""
-    if not image_path:
-        return "❌ Please upload an image first."
-    if not question.strip():
-        return "❌ Please enter a question about the image."
+def analyze_image(
+    image_path: str | None,
+    question: str,
+    history: list[dict],
+    stored_path: str | None,
+):
+    """
+    Streaming generator: analyse an image token-by-token and yield updated
+    chat history after every token so Gradio renders progress live.
 
-    agent = _get_agent()
-    result = agent.chat_with_image(image_path, question)
-    return result
+    Yields:
+        (updated_history, stored_image_path) tuples
+    """
+    # Decide which path to use: freshly uploaded > previously stored
+    effective_path = image_path or stored_path
+    if not effective_path:
+        history = history + [
+            {"role": "assistant", "content": "❌ Please upload an image first."}
+        ]
+        yield history, stored_path
+        return
+
+    q = question.strip() or "Describe this image in detail."
+
+    history = history + [{"role": "user", "content": q}]
+    history = history + [{"role": "assistant", "content": "⏳ Analysing image…"}]
+    yield history, effective_path  # Show spinner immediately
+
+    full_text = ""
+    try:
+        agent = _get_agent()
+        for token in agent.chat_with_image(effective_path, q):
+            full_text += token
+            history[-1] = {"role": "assistant", "content": full_text}
+            yield history, effective_path
+    except Exception as exc:
+        history[-1] = {"role": "assistant", "content": f"❌ Error: {exc}"}
+        yield history, effective_path
+
+
+def clear_image_chat() -> tuple[list[dict], None]:
+    """Reset image-tab conversation and stored image path."""
+    return [], None
+
 
 
 # ── Vault tab functions ───────────────────────────────────────────────────────
@@ -321,29 +355,79 @@ def build_ui() -> gr.Blocks:
             with gr.Tab("🖼️ Image Analysis"):
                 gr.Markdown("""
 *Upload an image — a screenshot, diagram, handwritten notes, or error message.
-The agent analyses it using `qwen3-vl` and enriches its answer with your vault context.*
+The agent analyses it using `qwen3-vl` and enriches the answer with your vault context.*
+*📌 After the first analysis you can keep asking follow-up questions in the box below without re-uploading.*
 """)
+
+                # Session state: keeps the image path between follow-up questions
+                _img_stored = gr.State(value=None)
+
                 with gr.Row(elem_id="image-layout"):
-                    with gr.Column(elem_id="image-panel"):
+                    # ── Left column: upload + question ──
+                    with gr.Column(scale=1, elem_id="image-panel"):
                         image_input = gr.Image(
                             type="filepath",
-                            label="Upload Image",
+                            label="📎 Upload Image",
                             height=300,
                         )
                         image_question = gr.Textbox(
-                            label="Your question",
-                            placeholder="Bu şəkli izah et / What does this diagram show? / Extract the text",
+                            label="❓ Your question (leave blank for a general analysis)",
+                            placeholder="Describe this image / What does this diagram show? / Extract the text",
                             lines=2,
                         )
-                        analyze_btn = gr.Button("🔍 Analyse Image", variant="primary")
+                        with gr.Row():
+                            analyze_btn = gr.Button(
+                                "🔍 Analyse Image",
+                                variant="primary",
+                                scale=3,
+                            )
+                            clear_img_btn = gr.Button(
+                                "🗑️ Clear",
+                                variant="secondary",
+                                scale=1,
+                            )
 
-                    with gr.Column(elem_id="result-panel"):
-                        image_result = gr.Markdown(label="Analysis Result")
+                    # ── Right column: chat history ──
+                    with gr.Column(scale=1, elem_id="result-panel"):
+                        image_chat = gr.Chatbot(
+                            label="🖼️ Analysis & Follow-up Chat",
+                            height=460,
+                            show_copy_button=True,
+                            render_markdown=True,
+                            type="messages",
+                            avatar_images=(None, "🤖"),
+                            elem_id="img-chatbot",
+                        )
+                        followup_box = gr.Textbox(
+                            label="",
+                            placeholder="📝 Ask a follow-up question about the image…",
+                            lines=1,
+                            container=False,
+                            elem_id="followup-composer",
+                        )
 
+                # ── Wire events ────────────────────────────────────────────
                 analyze_btn.click(
                     analyze_image,
-                    inputs=[image_input, image_question],
-                    outputs=image_result,
+                    inputs=[image_input, image_question, image_chat, _img_stored],
+                    outputs=[image_chat, _img_stored],
+                ).then(lambda: "", outputs=image_question)
+
+                image_question.submit(
+                    analyze_image,
+                    inputs=[image_input, image_question, image_chat, _img_stored],
+                    outputs=[image_chat, _img_stored],
+                ).then(lambda: "", outputs=image_question)
+
+                followup_box.submit(
+                    analyze_image,
+                    inputs=[gr.State(None), followup_box, image_chat, _img_stored],
+                    outputs=[image_chat, _img_stored],
+                ).then(lambda: "", outputs=followup_box)
+
+                clear_img_btn.click(
+                    clear_image_chat,
+                    outputs=[image_chat, _img_stored],
                 )
 
             # ── Tab 3: Vault Explorer ──────────────────────────────────────
@@ -430,7 +514,7 @@ if __name__ == "__main__":
     print()
 
     ui = build_ui()
-    ui.launch(
+    ui.queue(max_size=10).launch(
         server_name="0.0.0.0",
         server_port=7860,
         share=False,
