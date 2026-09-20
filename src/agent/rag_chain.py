@@ -57,23 +57,62 @@ class AgentResponse:
 # ── Conversation memory ───────────────────────────────────────────────────────
 
 class ConversationMemory:
-    """Simple sliding-window conversation buffer."""
+    """Encrypted persistent conversation buffer."""
 
     def __init__(self, max_turns: int = 10):
         self.max_turns = max_turns
-        self._turns: list[dict] = []  # [{"role": "user"|"assistant", "content": str}]
+        self._turns: list[dict] = []
+        
+        # Setup encryption
+        if not settings.memory_encryption_key:
+            from cryptography.fernet import Fernet
+            settings.memory_encryption_key = Fernet.generate_key().decode('utf-8')
+        
+        from cryptography.fernet import Fernet
+        self._fernet = Fernet(settings.memory_encryption_key.encode('utf-8'))
+        self._path = settings.memory_persist_path
+        
+        self._load()
+
+    def _load(self) -> None:
+        import json
+        if not self._path.exists():
+            return
+        try:
+            encrypted_data = self._path.read_bytes()
+            decrypted_data = self._fernet.decrypt(encrypted_data)
+            self._turns = json.loads(decrypted_data.decode('utf-8'))
+        except Exception as e:
+            print(f"Failed to load encrypted memory: {e}")
+            self._turns = []
+
+    def _save(self) -> None:
+        import json
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            data = json.dumps(self._turns).encode('utf-8')
+            encrypted_data = self._fernet.encrypt(data)
+            self._path.write_bytes(encrypted_data)
+        except Exception as e:
+            print(f"Failed to save encrypted memory: {e}")
 
     def add(self, role: str, content: str) -> None:
         self._turns.append({"role": role, "content": content})
         # Keep only the last N turns (each turn = 2 messages: user + assistant)
         if len(self._turns) > self.max_turns * 2:
             self._turns = self._turns[-(self.max_turns * 2):]
+        self._save()
 
     def to_messages(self) -> list[dict]:
         return list(self._turns)
 
     def clear(self) -> None:
         self._turns.clear()
+        if self._path.exists():
+            try:
+                self._path.unlink()
+            except Exception:
+                pass
 
     def is_empty(self) -> bool:
         return len(self._turns) == 0

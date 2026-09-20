@@ -281,7 +281,7 @@ def build_ui() -> gr.Blocks:
 <section id="hero">
   <div class="eyebrow">Private knowledge workspace</div>
   <div class="hero-title">ApexForge Scriptor</div>
-  <div class="hero-copy">Sənin qeydlərini anlayan, əlaqələndirən və şəxsi AI assistant.</div>
+  <div class="hero-copy">Your personal AI assistant that understands and connects your notes.</div>
   <div class="status-pill"><span class="status-dot"></span>{_mode_label} · {_provider_label} CONNECTED</div>
 </section>
 """)
@@ -290,7 +290,7 @@ def build_ui() -> gr.Blocks:
 
             # ── Tab 1: Chat ────────────────────────────────────────────────
             with gr.Tab("💬 Chat"):
-                gr.Markdown("### Sənin ikinci beynin\nQeydlərin, öyrənmə materialların və gündəliklərin üzərində soruş. Cavabların altında istifadə olunan mənbələr göstərilir.")
+                gr.Markdown("### Your Second Brain\nAsk questions about your notes, learning materials, and daily logs. Sources are shown below the answers.")
 
                 with gr.Row(elem_id="chat-layout"):
                     with gr.Column(scale=3, elem_id="chat-panel"):
@@ -305,7 +305,7 @@ def build_ui() -> gr.Blocks:
                         )
                         with gr.Row():
                             msg_box = gr.Textbox(
-                                placeholder="Ask a question about your notes... (Azerbaijani or English)",
+                                placeholder="Ask a question about your notes...",
                                 label="",
                                 scale=5,
                                 container=False,
@@ -332,11 +332,11 @@ def build_ui() -> gr.Blocks:
                             label="Tag Filter",
                             placeholder="e.g. SLEEP, EXAM, RUST",
                         )
-                        gr.Markdown("""<div id="quick-questions"><strong>Tez suallar</strong>
-- *Rust-da ownership nədir?*
-- *Bu həftə nə etdim?*
-- *ASM lesson 3 haqqında nə var?*
-- *Sabr nə deməkdir?*
+                        gr.Markdown("""<div id="quick-questions"><strong>Quick Questions</strong>
+- *What is ownership in Rust?*
+- *What did I do this week?*
+- *What is in ASM lesson 3?*
+- *What does sabr mean?*
 </div>""")
 
                 # Wire up chat
@@ -515,7 +515,27 @@ python -m src.ui.app
 | **Grok (xAI)** | `LLM_PROVIDER=grok` | {'✅ Active' if settings.llm_provider == 'grok' else '⬚'} |
 | **Qwen (DashScope)** | `LLM_PROVIDER=qwen` | {'✅ Active' if settings.llm_provider == 'qwen' else '⬚'} |
 | **Claude (Anthropic)** | `LLM_PROVIDER=claude` | {'✅ Active' if settings.llm_provider == 'claude' else '⬚'} |
+| **Cloudflare AI** | `LLM_PROVIDER=cloudflare` | {'✅ Active' if settings.llm_provider == 'cloudflare' else '⬚'} |
+
+---
+
+### Data Management
+
 """)
+                
+                with gr.Row():
+                    clear_mem_btn = gr.Button("🗑️ Clear Persistent Memory", variant="secondary")
+                    clear_mem_status = gr.Markdown("")
+                
+                def _clear_persistent_memory():
+                    agent = _get_agent()
+                    agent.clear_memory()
+                    return "✅ Encrypted memory successfully cleared from disk."
+                
+                clear_mem_btn.click(
+                    _clear_persistent_memory,
+                    outputs=clear_mem_status
+                )
 
     return demo
 

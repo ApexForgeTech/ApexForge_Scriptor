@@ -237,12 +237,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         data: [DONE]
     """
 
-    def __init__(self, provider: str) -> None:
+    def __init__(self, provider: str, base_url: Optional[str] = None, api_key: Optional[str] = None) -> None:
         self.provider_name = provider
-        base_url, key_env = _OPENAI_COMPAT_REGISTRY[provider]
-        self._base = base_url.rstrip("/")
+        if base_url and api_key:
+            self._base = base_url.rstrip("/")
+            self._api_key = api_key
+        else:
+            base_url_reg, key_env = _OPENAI_COMPAT_REGISTRY[provider]
+            self._base = base_url_reg.rstrip("/")
+            self._api_key = self._resolve_key(key_env)
         self._url = f"{self._base}/chat/completions"
-        self._api_key = self._resolve_key(key_env)
 
     @staticmethod
     def _resolve_key(env_var: str) -> str:
@@ -253,6 +257,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             "GEMINI_API_KEY":  settings.gemini_api_key,
             "GROK_API_KEY":    settings.grok_api_key,
             "QWEN_API_KEY":    settings.qwen_api_key,
+            "CLOUDFLARE_API_KEY": settings.cloudflare_api_key,
         }
         key = key_map.get(env_var, "")
         if not key:
@@ -325,13 +330,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 timeout=120,
             ) as resp:
                 if resp.status_code == 429:
-                    resp.read()
                     raise RuntimeError(
                         f"⚠️ {self.provider_name.upper()} rate limit exceeded. "
                         f"Please wait a moment and try again."
                     )
                 if resp.status_code in (401, 403):
-                    resp.read()
                     raise RuntimeError(
                         f"🔑 {self.provider_name.upper()} authentication failed. "
                         f"Check your API key in .env."
@@ -349,7 +352,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                         except json.JSONDecodeError:
                             continue
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
+                        
                         token = delta.get("content", "")
+                        if not token:
+                            # Some models (e.g. Cloudflare OSS, DeepSeek R1) send reasoning_content
+                            token = delta.get("reasoning_content", "")
+                            
                         if token:
                             yield token
         except RuntimeError:
@@ -363,7 +371,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
     def supports_vision(self) -> bool:
         # OpenAI (gpt-4o etc.) and Gemini support vision via content parts.
         # Mistral (pixtral), Grok, Qwen also have vision models.
-        return self.provider_name in ("openai", "gemini", "grok", "mistral", "qwen")
+        return self.provider_name in ("openai", "gemini", "grok", "mistral", "qwen", "cloudflare")
 
     def vision_chat_stream(
         self,
@@ -533,7 +541,7 @@ class ClaudeProvider(BaseLLMProvider):
 #  Factory
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_VALID_PROVIDERS = {"ollama", "openai", "mistral", "gemini", "grok", "qwen", "claude"}
+_VALID_PROVIDERS = {"ollama", "openai", "mistral", "gemini", "grok", "qwen", "claude", "cloudflare"}
 
 _provider_cache: dict[str, BaseLLMProvider] = {}
 
@@ -561,14 +569,21 @@ def get_provider(provider: Optional[str] = None) -> BaseLLMProvider:
         )
 
     instance: BaseLLMProvider
-    if name == "ollama":
-        instance = OllamaProvider()
-    elif name == "claude":
+    if name == "claude":
         instance = ClaudeProvider()
-    elif name in _OPENAI_COMPAT_REGISTRY:
-        instance = OpenAICompatibleProvider(name)
+    elif name == "ollama":
+        instance = OllamaProvider()
+    elif name == "cloudflare":
+        if not settings.cloudflare_api_key or not settings.cloudflare_account_id:
+            raise ValueError("API key or Account ID not set. Please set CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID in your .env file.")
+        instance = OpenAICompatibleProvider(
+            provider="cloudflare",
+            base_url=f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}/ai/v1",
+            api_key=settings.cloudflare_api_key,
+        )
     else:
-        raise ValueError(f"No handler for provider '{name}'.")
+        # OpenAI, Mistral, Gemini, Grok, Qwen
+        instance = OpenAICompatibleProvider(provider=name)
 
     _provider_cache[name] = instance
     logger.info("LLM provider initialised: %s", name)

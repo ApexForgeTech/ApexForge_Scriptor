@@ -40,6 +40,8 @@ class Settings:
     grok_api_key: str = os.getenv("GROK_API_KEY", "")
     qwen_api_key: str = os.getenv("QWEN_API_KEY", "")
     claude_api_key: str = os.getenv("CLAUDE_API_KEY", "")
+    cloudflare_api_key: str = os.getenv("CLOUDFLARE_API_KEY", "")
+    cloudflare_account_id: str = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
 
     # ── ChromaDB ──────────────────────────────────────────────────────────────
     chroma_persist_dir: Path = Path(os.getenv("CHROMA_PERSIST_DIR", "./data/chroma"))
@@ -52,6 +54,8 @@ class Settings:
     # ── Memory ────────────────────────────────────────────────────────────────
     memory_window: int = int(os.getenv("MEMORY_WINDOW", "10"))
     agent_memory_folder: str = os.getenv("AGENT_MEMORY_FOLDER", "Agent/Memory")
+    memory_encryption_key: str = os.getenv("MEMORY_ENCRYPTION_KEY", "")
+    memory_persist_path: Path = Path("./data/memory.enc")
 
     # ── Local time ──────────────────────────────────────────────────────────
     # IANA timezone name used for date-sensitive questions such as "today".
