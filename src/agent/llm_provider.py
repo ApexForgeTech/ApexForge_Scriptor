@@ -322,6 +322,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         **kwargs: Any,
     ) -> Generator[str, None, None]:
         payload = self._payload(messages, model, temperature, max_tokens, stop, stream=True)
+        is_reasoning = False
         try:
             with httpx.stream(
                 "POST", self._url,
@@ -353,13 +354,26 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                             continue
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
                         
-                        token = delta.get("content", "")
-                        if not token:
-                            # Some models (e.g. Cloudflare OSS, DeepSeek R1) send reasoning_content
-                            token = delta.get("reasoning_content", "")
-                            
-                        if token:
-                            yield token
+                        # Handle reasoning_content -> <think> mapping
+                        if "reasoning_content" in delta:
+                            r_token = delta.get("reasoning_content")
+                            if r_token is not None:
+                                if not is_reasoning:
+                                    is_reasoning = True
+                                    yield "<think>\n"
+                                if r_token:
+                                    yield r_token
+                                continue
+                                
+                        # Handle normal content
+                        if "content" in delta:
+                            c_token = delta.get("content")
+                            if c_token is not None:
+                                if is_reasoning:
+                                    is_reasoning = False
+                                    yield "\n</think>\n"
+                                if c_token:
+                                    yield c_token
         except RuntimeError:
             raise
         except httpx.HTTPStatusError as exc:

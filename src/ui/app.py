@@ -75,13 +75,35 @@ def chat_respond(
             while True:
                 token = next(stream_gen)
                 full_answer += token
-                history[-1] = {"role": "assistant", "content": full_answer}
+                
+                # Format <think> tags into <details> HTML for the UI
+                formatted_answer = full_answer.replace(
+                    "<think>", 
+                    "<details class='thought-process'><summary>💡 Thought process</summary>\n<div class='thought-content'>\n"
+                ).replace(
+                    "</think>", 
+                    "\n</div>\n</details>\n\n"
+                )
+                
+                # Auto-close the <details> tag if it's currently streaming the thought
+                if "<details" in formatted_answer and "</details>" not in formatted_answer:
+                    formatted_answer += "\n</div>\n</details>"
+
+                history[-1] = {"role": "assistant", "content": formatted_answer}
                 yield history, ""
         except StopIteration as e:
             response = e.value
             if response and response.sources:
                 sources_text = response.sources_text
-                history[-1] = {"role": "assistant", "content": full_answer + sources_text}
+                # Append sources to the properly formatted answer
+                final_answer = full_answer.replace(
+                    "<think>", 
+                    "<details class='thought-process'><summary>💡 Thought process</summary>\n<div class='thought-content'>\n"
+                ).replace(
+                    "</think>", 
+                    "\n</div>\n</details>\n\n"
+                )
+                history[-1] = {"role": "assistant", "content": final_answer + sources_text}
                 yield history, ""
 
     except Exception as exc:
@@ -237,7 +259,52 @@ def build_ui() -> gr.Blocks:
     .hero-title { margin: 7px 0 5px; font-size: clamp(1.7rem, 4vw, 2.75rem); font-weight: 800; letter-spacing: -.045em; color: #18294a; }
     .hero-copy { color: var(--muted); font-size: 1rem; max-width: 680px; }
     .status-pill { display: inline-flex; margin-top: 17px; padding: 7px 11px; border: 1px solid rgba(0,121,232,.24); border-radius: 999px; color: #1762a8; background: rgba(255,255,255,.68); font-size: .79rem; font-weight: 700; }
-    .status-dot { width: 7px; height: 7px; background: #5ff3ac; border-radius: 50%; margin: 5px 7px 0 0; box-shadow: 0 0 12px #5ff3ac; }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--color-green-500);
+      border-radius: 50%;
+      margin-right: 8px;
+      box-shadow: 0 0 8px var(--color-green-500);
+    }
+    
+    /* ── Thought Process ── */
+    details.thought-process {
+        margin: 10px 0;
+        border: 1px solid var(--border-color-primary);
+        border-radius: 8px;
+        background: var(--background-fill-secondary);
+        overflow: hidden;
+    }
+    details.thought-process summary {
+        cursor: pointer;
+        padding: 12px 16px;
+        font-weight: 500;
+        font-size: 0.9em;
+        color: var(--body-text-color-subdued);
+        user-select: none;
+        list-style: none; /* Hide default arrow in some browsers */
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    details.thought-process summary::-webkit-details-marker {
+        display: none;
+    }
+    details.thought-process summary:hover {
+        background: var(--background-fill-primary);
+    }
+    .thought-content {
+        padding: 16px;
+        font-size: 0.9em;
+        color: var(--body-text-color-subdued);
+        border-top: 1px solid var(--border-color-primary);
+        white-space: pre-wrap;
+        background: var(--background-fill-secondary);
+    }
+
+    /* ── Gradio Overrides ── */
     #main-tabs { border: 1px solid var(--line); padding: 8px; border-radius: 18px; background: rgba(255,255,255,.65); backdrop-filter: blur(16px); }
     #main-tabs button { border-radius: 11px !important; color: var(--muted) !important; font-weight: 700 !important; }
     #main-tabs button.selected { color: #18335b !important; background: linear-gradient(100deg, #c9f2ff, #e5d7ff 55%, #ffe0ef) !important; }
