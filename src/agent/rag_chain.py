@@ -22,6 +22,7 @@ from src.retrieval.search import search, SearchResult, build_context
 from src.agent.prompts import SYSTEM_PROMPT, RAG_PROMPT_TEMPLATE
 from src.tools.system_tools import temporal_context
 from src.agent.llm_provider import get_provider
+from src.agent.memory.global_memory import GlobalMemory
 
 
 # ── Response model ────────────────────────────────────────────────────────────
@@ -134,12 +135,34 @@ class RAGChain:
         self,
         top_k: Optional[int] = None,
         memory: Optional[ConversationMemory] = None,
+        global_memory: Optional[GlobalMemory] = None,
     ):
         self.top_k = top_k or settings.retrieval_top_k
         self.memory = memory or ConversationMemory(max_turns=settings.memory_window)
+        self.global_memory = global_memory or GlobalMemory()
         self._provider = get_provider()
 
     # ── Retrieval ──────────────────────────────────────────────────────────
+
+    def _expand_query(self, original_query: str) -> list[str]:
+        """Use the LLM to generate 2 optimized search queries based on the original query."""
+        prompt = (
+            f"You are a search query optimizer for a semantic search engine.\n"
+            f"The user wants to search their personal notes for: '{original_query}'\n"
+            f"Generate 2 optimized, slightly different search queries.\n"
+            f"CRITICAL: The user often types without Azerbaijani specific letters (e.g. typing 'e' instead of 'ə', 's' instead of 'ş', 'c' instead of 'ç'). "
+            f"One of your variations MUST fix these missing characters to the proper grammatically correct Azerbaijani spelling if applicable.\n"
+            f"Return ONLY the 2 queries, each on a new line, with no bullet points or extra text."
+        )
+        
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            response = self._provider.chat(messages, temperature=0.1, max_tokens=100)
+            queries = [q.strip("- *1234567890.") for q in response.split("\n") if q.strip()]
+            return [original_query] + queries[:2]
+        except Exception as e:
+            # Fallback to original query on error
+            return [original_query]
 
     def retrieve(
         self,
@@ -148,14 +171,33 @@ class RAGChain:
         folder_subcategory: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> list[SearchResult]:
-        """Retrieve relevant note chunks for a query."""
-        return search(
-            query=query,
-            top_k=self.top_k,
-            note_type=note_type,
-            folder_subcategory=folder_subcategory,
-            tag=tag,
-        )
+        """Retrieve relevant note chunks using multi-query expansion."""
+        queries = self._expand_query(query)
+        all_results: dict[str, SearchResult] = {}
+        
+        # We divide top_k among the queries (minimum 2 per query)
+        per_query_k = max(2, self.top_k // len(queries))
+        
+        for q in queries:
+            results = search(
+                query=q,
+                top_k=per_query_k,
+                note_type=note_type,
+                folder_subcategory=folder_subcategory,
+                tag=tag,
+            )
+            # Deduplicate by text content
+            for r in results:
+                if r.text not in all_results:
+                    all_results[r.text] = r
+                else:
+                    # Keep the one with better (higher) relevance score
+                    if r.relevance_score > all_results[r.text].relevance_score:
+                        all_results[r.text] = r
+                        
+        # Sort combined results by relevance and take top_k
+        sorted_results = sorted(all_results.values(), key=lambda x: x.relevance_score, reverse=True)
+        return sorted_results[:self.top_k]
 
     # ── Prompt building ────────────────────────────────────────────────────
 
@@ -166,7 +208,8 @@ class RAGChain:
             question=query,
         )
 
-        messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{temporal_context()}"}]
+        formatted_system = SYSTEM_PROMPT.format(user_memory=self.global_memory.get_memory_string())
+        messages = [{"role": "system", "content": f"{formatted_system}\n\n{temporal_context()}"}]
         messages.extend(self.memory.to_messages())
         messages.append({"role": "user", "content": user_content})
         return messages

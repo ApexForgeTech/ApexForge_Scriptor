@@ -39,6 +39,9 @@ def _get_agent() -> ObsidianAgent:
 
 # ── Chat tab functions ────────────────────────────────────────────────────────
 
+import re
+from src.agent.tools.system_executor import execute_command
+
 def chat_respond(
     message: str,
     history: list[dict],
@@ -53,12 +56,35 @@ def chat_respond(
 
     agent = _get_agent()
 
+    # Intercept /approve and /deny for system commands
+    msg_lower = message.strip().lower()
+    if msg_lower in ("/approve", "/deny") and len(history) >= 1:
+        last_msg = history[-1].get("content", "")
+        # Look for [RUN_CMD: xxx] in the last assistant message
+        cmd_match = re.search(r"\[RUN_CMD:\s*(.*?)\]", last_msg)
+        if cmd_match:
+            cmd = cmd_match.group(1).strip()
+            if msg_lower == "/approve":
+                history = history + [{"role": "user", "content": f"User approved command: `{cmd}`"}]
+                yield history, ""
+                
+                output = execute_command(cmd)
+                response_msg = f"[Command Output]\n```\n{output}\n```\n"
+                
+                # We feed this back to the agent as if the user sent it, so it can continue reasoning
+                message = response_msg
+            else:
+                history = history + [{"role": "user", "content": f"User denied command: `{cmd}`"}]
+                yield history, ""
+                message = "The user denied permission to run that command. Acknowledge and proceed without it."
+
     note_type = note_type_filter if note_type_filter != "All" else None
     topic = topic_filter.strip() or None
     tag = tag_filter.strip().lstrip("#") or None
 
     # Add user message to history immediately (openai-style)
-    history = history + [{"role": "user", "content": message}]
+    if msg_lower not in ("/approve", "/deny") or not cmd_match:
+        history = history + [{"role": "user", "content": message}]
     history.append({"role": "assistant", "content": ""})
 
     full_answer = ""
@@ -360,6 +386,36 @@ def build_ui() -> gr.Blocks:
                 gr.Markdown("### Your Second Brain\nAsk questions about your notes, learning materials, and daily logs. Sources are shown below the answers.")
 
                 with gr.Row(elem_id="chat-layout"):
+                    # Sidebar for sessions
+                    with gr.Column(scale=1, elem_id="sessions-panel", min_width=200):
+                        gr.Markdown("#### Chat History")
+                        new_chat_btn = gr.Button("➕ New Chat", variant="primary", size="sm")
+                        
+                        def _get_session_choices():
+                            agent = _get_agent()
+                            sessions = agent.session_manager.get_all_sessions()
+                            if not sessions:
+                                return []
+                            return [(s["title"], s["id"]) for s in sessions]
+                            
+                        session_list = gr.Radio(
+                            choices=_get_session_choices(),
+                            label="Recent Sessions",
+                            interactive=True
+                        )
+                        
+                        def _load_session(session_id):
+                            agent = _get_agent()
+                            if session_id:
+                                agent.set_session(session_id)
+                            return agent.memory.to_messages()
+                            
+                        def _new_chat():
+                            agent = _get_agent()
+                            agent.create_new_session()
+                            return [], gr.update(choices=_get_session_choices(), value=None)
+                            
+                    # Main chat panel
                     with gr.Column(scale=3, elem_id="chat-panel"):
                         chatbot = gr.Chatbot(
                             label="Conversation",
@@ -370,6 +426,11 @@ def build_ui() -> gr.Blocks:
                             avatar_images=(None, "🤖"),
                             elem_id="chatbot",
                         )
+                        
+                        # Wire up sidebar actions
+                        session_list.change(_load_session, inputs=session_list, outputs=chatbot)
+                        new_chat_btn.click(_new_chat, outputs=[chatbot, session_list])
+                        
                         with gr.Row():
                             msg_box = gr.Textbox(
                                 placeholder="Ask a question about your notes...",
@@ -591,17 +652,45 @@ python -m src.ui.app
 """)
                 
                 with gr.Row():
-                    clear_mem_btn = gr.Button("🗑️ Clear Persistent Memory", variant="secondary")
+                    clear_mem_btn = gr.Button("🗑️ Clear Chat History", variant="secondary")
                     clear_mem_status = gr.Markdown("")
                 
                 def _clear_persistent_memory():
                     agent = _get_agent()
                     agent.clear_memory()
-                    return "✅ Encrypted memory successfully cleared from disk."
+                    return "✅ Chat history cleared."
                 
                 clear_mem_btn.click(
                     _clear_persistent_memory,
                     outputs=clear_mem_status
+                )
+
+                gr.Markdown("### 🧠 Long-Term User Memory\nThe agent automatically learns facts about you during conversations. You can manually edit these facts below.")
+                
+                def _get_global_memory():
+                    agent = _get_agent()
+                    return agent.rag.global_memory.get_raw_memory()
+                
+                def _save_global_memory(text):
+                    agent = _get_agent()
+                    agent.rag.global_memory.set_raw_memory(text)
+                    return "✅ Long-term memory updated."
+
+                with gr.Row():
+                    global_mem_text = gr.Textbox(
+                        value=_get_global_memory,
+                        label="Global Memory Facts (one per line)",
+                        lines=10,
+                        interactive=True
+                    )
+                with gr.Row():
+                    save_mem_btn = gr.Button("💾 Save Global Memory", variant="primary")
+                    save_mem_status = gr.Markdown("")
+                    
+                save_mem_btn.click(
+                    _save_global_memory,
+                    inputs=global_mem_text,
+                    outputs=save_mem_status
                 )
 
     return demo

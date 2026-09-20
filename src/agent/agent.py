@@ -1,3 +1,4 @@
+from src.agent.memory.session_manager import SessionManager
 """
 src/agent/agent.py — Unified Agent class.
 
@@ -74,9 +75,37 @@ class ObsidianAgent:
       - Connect related notes with wikilinks (with permission)
     """
 
+
     def __init__(self):
         self.memory = ConversationMemory(max_turns=settings.memory_window)
         self.rag = RAGChain(memory=self.memory)
+        self.session_manager = SessionManager()
+        self.current_session_id = self.session_manager.create_new_session()
+
+    def set_session(self, session_id: str) -> None:
+        """Switch to an existing session."""
+        self.current_session_id = session_id
+        history = self.session_manager.load_session(session_id)
+        self.memory.clear()
+        for msg in history:
+            self.memory.add(msg["role"], msg["content"])
+
+    def create_new_session(self) -> None:
+        """Start a new chat session."""
+        self.current_session_id = self.session_manager.create_new_session()
+        self.memory.clear()
+
+    def _save_current_session(self, first_message: Optional[str] = None) -> None:
+        """Save current memory to the active session. Optionally generates a title if it's the first message."""
+        history = self.memory.to_messages()
+        if not history:
+            return
+            
+        title = None
+        if first_message and len(history) <= 2:
+            title = self.session_manager.generate_title(first_message)
+            
+        self.session_manager.save_session(self.current_session_id, history, title=title)
 
     # ── Text chat ──────────────────────────────────────────────────────────
 
@@ -112,6 +141,8 @@ class ObsidianAgent:
             tag=tag,
         )
 
+import threading
+
     def chat_stream(
         self,
         message: str,
@@ -123,19 +154,27 @@ class ObsidianAgent:
         Stream the agent's response token by token.
         Yields string tokens. Returns AgentResponse when complete.
         """
+        # Update global memory in the background so it doesn't block UI response
+        def _update_memory():
+            self.rag.global_memory.update_from_chat(message)
+        threading.Thread(target=_update_memory, daemon=True).start()
+
         if _is_direct_time_question(message):
             answer = current_time(_response_language(message))
             self.memory.add("user", message)
             self.memory.add("assistant", answer)
             yield answer
-            return AgentResponse(answer=answer, query=message)
+            return AgentResponse(answer=answer, sources=[], query=message)
 
-        return (yield from self.rag.ask_stream(
+        response = yield from self.rag.ask_stream(
             query=message,
             note_type=note_type,
             folder_subcategory=folder_subcategory,
             tag=tag,
-        ))
+        )
+        
+        self._save_current_session(first_message=message)
+        return response
 
     # ── Vision ─────────────────────────────────────────────────────────────
 
