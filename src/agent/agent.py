@@ -1,4 +1,5 @@
-from src.agent.memory.session_manager import SessionManager
+from __future__ import annotations
+
 """
 src/agent/agent.py — Unified Agent class.
 
@@ -18,9 +19,10 @@ Usage:
     print(response)
 """
 
-from __future__ import annotations
+from src.agent.memory.session_manager import SessionManager
 
 import sys
+import threading
 import unicodedata
 from pathlib import Path
 from typing import Generator, Optional
@@ -140,8 +142,6 @@ class ObsidianAgent:
             folder_subcategory=folder_subcategory,
             tag=tag,
         )
-
-import threading
 
     def chat_stream(
         self,

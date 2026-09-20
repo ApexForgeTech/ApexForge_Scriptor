@@ -365,6 +365,7 @@ def build_ui() -> gr.Blocks:
             font=[gr.themes.GoogleFont("Inter"), "sans-serif"],
         ),
         css=custom_css,
+        fill_height=True,
     ) as demo:
 
         _provider_label = settings.llm_provider.upper()
@@ -419,12 +420,12 @@ def build_ui() -> gr.Blocks:
                     with gr.Column(scale=3, elem_id="chat-panel"):
                         chatbot = gr.Chatbot(
                             label="Conversation",
-                            height=520,
                             show_copy_button=True,
                             render_markdown=True,
                             type="messages",
                             avatar_images=(None, "🤖"),
                             elem_id="chatbot",
+                            scale=1,
                         )
                         
                         # Wire up sidebar actions
