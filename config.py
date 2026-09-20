@@ -23,10 +23,23 @@ class Settings:
     # ── Obsidian Vault ────────────────────────────────────────────────────────
     vault_path: Path = Path(os.getenv("VAULT_PATH", "~/Documents/Obsidian")).expanduser()
 
+    # ── LLM Provider ─────────────────────────────────────────────────────────
+    # Which provider to use:  ollama | openai | mistral | gemini | grok | qwen | claude
+    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
+
     # ── Ollama ────────────────────────────────────────────────────────────────
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     llm_model: str = os.getenv("LLM_MODEL", "qwen3-vl:2b-instruct")
     embed_model: str = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+
+    # ── External API Keys ────────────────────────────────────────────────────
+    # Set the key for whichever provider you selected above.
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    mistral_api_key: str = os.getenv("MISTRAL_API_KEY", "")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    grok_api_key: str = os.getenv("GROK_API_KEY", "")
+    qwen_api_key: str = os.getenv("QWEN_API_KEY", "")
+    claude_api_key: str = os.getenv("CLAUDE_API_KEY", "")
 
     # ── ChromaDB ──────────────────────────────────────────────────────────────
     chroma_persist_dir: Path = Path(os.getenv("CHROMA_PERSIST_DIR", "./data/chroma"))
@@ -74,6 +87,7 @@ class Settings:
     def __repr__(self) -> str:
         return (
             f"Settings(\n"
+            f"  llm_provider     = {self.llm_provider}\n"
             f"  vault_path       = {self.vault_path}\n"
             f"  llm_model        = {self.llm_model}\n"
             f"  embed_model      = {self.embed_model}\n"

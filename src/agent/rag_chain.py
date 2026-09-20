@@ -16,13 +16,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Optional
 
-import httpx
-
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import settings
 from src.retrieval.search import search, SearchResult, build_context
 from src.agent.prompts import SYSTEM_PROMPT, RAG_PROMPT_TEMPLATE
 from src.tools.system_tools import temporal_context
+from src.agent.llm_provider import get_provider
 
 
 # ── Response model ────────────────────────────────────────────────────────────
@@ -99,7 +98,7 @@ class RAGChain:
     ):
         self.top_k = top_k or settings.retrieval_top_k
         self.memory = memory or ConversationMemory(max_turns=settings.memory_window)
-        self._ollama_url = f"{settings.ollama_base_url}/api/chat"
+        self._provider = get_provider()
 
     # ── Retrieval ──────────────────────────────────────────────────────────
 
@@ -158,23 +157,13 @@ class RAGChain:
         context = build_context(sources)
         messages = self._build_messages(query, context)
 
-        payload = {
-            "model": settings.llm_model,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": 0.3,
-                "num_predict": 512,
-                "repeat_penalty": 1.3,
-                "repeat_last_n": 64,
-                "stop": ["</s>", "<|im_end|>", "User question:"],
-            },
-            "think": False,
-        }
-
-        resp = httpx.post(self._ollama_url, json=payload, timeout=300)
-        resp.raise_for_status()
-        raw_answer = resp.json()["message"]["content"].strip()
+        stop = ["</s>", "<|im_end|>", "User question:"]
+        raw_answer = self._provider.chat(
+            messages=messages,
+            temperature=0.3,
+            max_tokens=512,
+            stop=stop,
+        )
 
         # Remove any inline "📎 Sources:" block the model wrote itself (we add our own)
         import re
@@ -216,40 +205,17 @@ class RAGChain:
         context = build_context(sources)
         messages = self._build_messages(query, context)
 
-        payload = {
-            "model": settings.llm_model,
-            "messages": messages,
-            "stream": True,
-            "options": {
-                "temperature": 0.3,
-                "num_predict": 512,
-                "repeat_penalty": 1.3,
-                "repeat_last_n": 64,
-                "stop": ["</s>", "<|im_end|>", "User question:"],
-            },
-            "think": False,
-        }
-
+        stop = ["</s>", "<|im_end|>", "User question:"]
         full_answer = ""
 
-        with httpx.stream("POST", self._ollama_url, json=payload, timeout=120) as resp:
-            resp.raise_for_status()
-            import json
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                try:
-                    chunk = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                token = chunk.get("message", {}).get("content", "")
-                if token:
-                    full_answer += token
-                    yield token
-
-                if chunk.get("done", False):
-                    break
+        for token in self._provider.chat_stream(
+            messages=messages,
+            temperature=0.3,
+            max_tokens=512,
+            stop=stop,
+        ):
+            full_answer += token
+            yield token
 
         # Update memory after streaming completes
         self.memory.add("user", query)

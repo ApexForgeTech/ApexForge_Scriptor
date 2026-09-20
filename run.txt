@@ -1,0 +1,38 @@
+I'll check the project structure to understand what you're working with and how to run it.
+
+
+
+Bu layihəni işə salmaq üçün əmrlər:
+
+**1. Virtual mühiti aktivləşdir:**
+```bash
+source .venv/bin/activate
+```
+
+**2. Ollama modellərini yoxla:**
+```bash
+ollama list
+```
+
+**3. Bağlantı testlərini çalıştır:**
+```bash
+python scripts/test_ollama.py
+python scripts/test_chromadb.py
+```
+
+**4. Vault-u indeksləşdir (ilk dəfə):**
+```bash
+python -m src.ingestion.embedder --vault /home/neo/Documents/Obsidian
+```
+
+**5. Agent-i başlat (Web UI):**
+```bash
+python -m src.ui.app
+```
+
+**Və ya CLI rejimi:**
+```bash
+python -m src.agent.agent
+```
+
+[.env](cci:7://file:///home/neo/Documents/simpleProjects/ApexForge_Scriptor/.env:0:0-0:0) faylın artıq konfiqurasiya olunub (`VAULT_PATH=/home/neo/Documents/Obsidian`). [.venv](cci:9://file:///home/neo/Documents/simpleProjects/ApexForge_Scriptor/.venv:0:0-0:0) də mövcuddur, sadəcə aktivləşdirmək və asılılıqları yoxlamaq lazımdır.

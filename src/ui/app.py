@@ -274,12 +274,15 @@ def build_ui() -> gr.Blocks:
         css=custom_css,
     ) as demo:
 
-        gr.HTML("""
+        _provider_label = settings.llm_provider.upper()
+        _mode_label = "LOCAL MODE" if settings.llm_provider == "ollama" else "CLOUD MODE"
+
+        gr.HTML(f"""
 <section id="hero">
   <div class="eyebrow">Private knowledge workspace</div>
   <div class="hero-title">ApexForge Scriptor</div>
-  <div class="hero-copy">Sənin qeydlərini anlayan, əlaqələndirən və yalnız lokal işləyən şəxsi AI assistant.</div>
-  <div class="status-pill"><span class="status-dot"></span>LOCAL MODE · OLLAMA CONNECTED</div>
+  <div class="hero-copy">Sənin qeydlərini anlayan, əlaqələndirən və şəxsi AI assistant.</div>
+  <div class="status-pill"><span class="status-dot"></span>{_mode_label} · {_provider_label} CONNECTED</div>
 </section>
 """)
 
@@ -482,6 +485,7 @@ The agent analyses it using `qwen3-vl` and enriches the answer with your vault c
 
 | Setting | Value |
 |---------|-------|
+| **LLM Provider** | `{settings.llm_provider}` |
 | **Vault Path** | `{settings.vault_path}` |
 | **LLM Model** | `{settings.llm_model}` |
 | **Embed Model** | `{settings.embed_model}` |
@@ -499,6 +503,18 @@ To change these settings, edit the `.env` file and restart the application:
 nano .env
 python -m src.ui.app
 ```
+
+### Supported Providers
+
+| Provider | Env Var | Status |
+|----------|---------|--------|
+| **Ollama** (local) | `LLM_PROVIDER=ollama` | {'✅ Active' if settings.llm_provider == 'ollama' else '⬚'} |
+| **OpenAI** | `LLM_PROVIDER=openai` | {'✅ Active' if settings.llm_provider == 'openai' else '⬚'} |
+| **Mistral AI** | `LLM_PROVIDER=mistral` | {'✅ Active' if settings.llm_provider == 'mistral' else '⬚'} |
+| **Gemini** | `LLM_PROVIDER=gemini` | {'✅ Active' if settings.llm_provider == 'gemini' else '⬚'} |
+| **Grok (xAI)** | `LLM_PROVIDER=grok` | {'✅ Active' if settings.llm_provider == 'grok' else '⬚'} |
+| **Qwen (DashScope)** | `LLM_PROVIDER=qwen` | {'✅ Active' if settings.llm_provider == 'qwen' else '⬚'} |
+| **Claude (Anthropic)** | `LLM_PROVIDER=claude` | {'✅ Active' if settings.llm_provider == 'claude' else '⬚'} |
 """)
 
     return demo
@@ -507,10 +523,11 @@ python -m src.ui.app
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("🧠 Starting Obsidian Local AI Agent...")
-    print(f"   Vault: {settings.vault_path}")
-    print(f"   LLM:   {settings.llm_model}")
-    print(f"   Embed: {settings.embed_model}")
+    print("🧠 Starting Obsidian AI Agent...")
+    print(f"   Provider: {settings.llm_provider}")
+    print(f"   Vault:    {settings.vault_path}")
+    print(f"   LLM:      {settings.llm_model}")
+    print(f"   Embed:    {settings.embed_model}")
     print()
 
     ui = build_ui()
