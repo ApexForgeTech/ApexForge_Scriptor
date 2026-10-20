@@ -370,7 +370,14 @@ def build_ui() -> gr.Blocks:
 
         _provider_label = settings.llm_provider.upper()
         _mode_label = "LOCAL MODE" if settings.llm_provider == "ollama" else "CLOUD MODE"
-
+        
+        def _update_session_id_display():
+            agent = _get_agent()
+            session_id = agent.session_manager.current_session_id
+            if session_id:
+                return f"**Session ID:** `{session_id}`"
+            return ""
+        
         gr.HTML(f"""
 <section id="hero">
   <div class="eyebrow">Private knowledge workspace</div>
@@ -379,6 +386,8 @@ def build_ui() -> gr.Blocks:
   <div class="status-pill"><span class="status-dot"></span>{_mode_label} · {_provider_label} CONNECTED</div>
 </section>
 """)
+        
+        session_id_display = gr.Markdown(_update_session_id_display, elem_id="session-id-display")
 
         with gr.Tabs(elem_id="main-tabs"):
 
@@ -387,34 +396,34 @@ def build_ui() -> gr.Blocks:
                 gr.Markdown("### Your Second Brain\nAsk questions about your notes, learning materials, and daily logs. Sources are shown below the answers.")
 
                 with gr.Row(elem_id="chat-layout"):
-                    # Sidebar for sessions
-                    with gr.Column(scale=1, elem_id="sessions-panel", min_width=200):
-                        gr.Markdown("#### Chat History")
-                        new_chat_btn = gr.Button("➕ New Chat", variant="primary", size="sm")
-                        
-                        def _get_session_choices():
-                            agent = _get_agent()
-                            sessions = agent.session_manager.get_all_sessions()
-                            if not sessions:
-                                return []
-                            return [(s["title"], s["id"]) for s in sessions]
+                    # Sidebar for sessions (collapsible)
+                    with gr.Accordion("💬 Chat History", open=True, elem_id="sessions-accordion"):
+                        with gr.Column(scale=1, elem_id="sessions-panel", min_width=200):
+                            new_chat_btn = gr.Button("➕ New Chat", variant="primary", size="sm")
                             
-                        session_list = gr.Radio(
-                            choices=_get_session_choices(),
-                            label="Recent Sessions",
-                            interactive=True
-                        )
-                        
-                        def _load_session(session_id):
-                            agent = _get_agent()
-                            if session_id:
-                                agent.set_session(session_id)
-                            return agent.memory.to_messages()
+                            def _get_session_choices():
+                                agent = _get_agent()
+                                sessions = agent.session_manager.get_all_sessions()
+                                if not sessions:
+                                    return []
+                                return [(s["title"], s["id"]) for s in sessions]
+                                
+                            session_list = gr.Radio(
+                                choices=_get_session_choices(),
+                                label="Recent Sessions",
+                                interactive=True
+                            )
                             
-                        def _new_chat():
-                            agent = _get_agent()
-                            agent.create_new_session()
-                            return [], gr.update(choices=_get_session_choices(), value=None)
+                            def _load_session(session_id):
+                                agent = _get_agent()
+                                if session_id:
+                                    agent.set_session(session_id)
+                                return agent.memory.to_messages(), _update_session_id_display()
+                            
+                            def _new_chat():
+                                agent = _get_agent()
+                                agent.create_new_session()
+                                return [], gr.update(choices=_get_session_choices(), value=None), _update_session_id_display()
                             
                     # Main chat panel
                     with gr.Column(scale=3, elem_id="chat-panel"):
@@ -429,8 +438,8 @@ def build_ui() -> gr.Blocks:
                         )
                         
                         # Wire up sidebar actions
-                        session_list.change(_load_session, inputs=session_list, outputs=chatbot)
-                        new_chat_btn.click(_new_chat, outputs=[chatbot, session_list])
+                        session_list.change(_load_session, inputs=session_list, outputs=[chatbot, session_id_display])
+                        new_chat_btn.click(_new_chat, outputs=[chatbot, session_list, session_id_display])
                         
                         with gr.Row():
                             msg_box = gr.Textbox(
@@ -447,21 +456,21 @@ def build_ui() -> gr.Blocks:
                             clear_btn = gr.Button("🗑️ Clear Chat", variant="secondary", size="sm")
 
                     with gr.Column(scale=1, elem_id="side-panel"):
-                        gr.Markdown("### 🔍 Filters")
-                        note_type = gr.Radio(
-                            choices=["All", "daily", "learning", "general"],
-                            value="All",
-                            label="Note Type",
-                        )
-                        topic_filter = gr.Textbox(
-                            label="Topic Folder",
-                            placeholder="e.g. RUST, ASM, January",
-                        )
-                        tag_filter = gr.Textbox(
-                            label="Tag Filter",
-                            placeholder="e.g. SLEEP, EXAM, RUST",
-                        )
-                        gr.Markdown("""<div id="quick-questions"><strong>Quick Questions</strong>
+                        with gr.Accordion("🔍 Filters", open=True, elem_id="filters-accordion"):
+                            note_type = gr.Radio(
+                                choices=["All", "daily", "learning", "general"],
+                                value="All",
+                                label="Note Type",
+                            )
+                            topic_filter = gr.Textbox(
+                                label="Topic Folder",
+                                placeholder="e.g. RUST, ASM, January",
+                            )
+                            tag_filter = gr.Textbox(
+                                label="Tag Filter",
+                                placeholder="e.g. SLEEP, EXAM, RUST",
+                            )
+                            gr.Markdown("""<div id="quick-questions"><strong>Quick Questions</strong>
 - *What is ownership in Rust?*
 - *What did I do this week?*
 - *What is in ASM lesson 3?*

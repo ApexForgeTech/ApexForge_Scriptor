@@ -9,6 +9,9 @@ Available tools:
   - create_note    : Create a new .md note in the vault
   - update_note    : Append content to an existing note
   - add_link       : Add a wikilink [[Target]] to a note
+  - add_memory     : Add a fact to global memory
+  - remove_memory  : Remove a fact from global memory
+  - list_memory    : List all facts in global memory
 """
 
 from __future__ import annotations
@@ -224,3 +227,110 @@ def add_link(
         return f"✅ Link {link_text} added to '{rel_path}'"
     except Exception as exc:
         return f"❌ Failed to add link: {exc}"
+
+
+# ── Global Memory Tools ────────────────────────────────────────────────────────
+
+def add_memory(fact: str, ui_mode: bool = False) -> str:
+    """
+    Add a fact to the global long-term memory.
+
+    Args:
+        fact:    The fact to remember (e.g., "User prefers Rust over C++").
+        ui_mode: If True, skips CLI prompt.
+
+    Returns:
+        Success or error message.
+    """
+    from src.agent.memory.global_memory import GlobalMemory
+    
+    approved = request_permission(
+        action="Add to global memory",
+        target="global memory",
+        details=f"Fact: '{fact}'",
+        ui_mode=ui_mode,
+    )
+
+    if not approved:
+        return f"❌ Cancelled — fact was NOT added to memory."
+
+    try:
+        gm = GlobalMemory()
+        if fact not in gm.memory:
+            gm.memory.append(fact)
+            gm._save()
+            return f"✅ Fact added to global memory: '{fact}'"
+        else:
+            return f"ℹ️ Fact already exists in memory: '{fact}'"
+    except Exception as exc:
+        return f"❌ Failed to add to memory: {exc}"
+
+
+def remove_memory(fact: str, ui_mode: bool = False) -> str:
+    """
+    Remove a fact from global long-term memory.
+
+    Args:
+        fact:    The fact to remove (exact match or partial match).
+        ui_mode: If True, skips CLI prompt.
+
+    Returns:
+        Success or error message.
+    """
+    from src.agent.memory.global_memory import GlobalMemory
+    
+    approved = request_permission(
+        action="Remove from global memory",
+        target="global memory",
+        details=f"Fact: '{fact}'",
+        ui_mode=ui_mode,
+    )
+
+    if not approved:
+        return f"❌ Cancelled — fact was NOT removed from memory."
+
+    try:
+        gm = GlobalMemory()
+        original_count = len(gm.memory)
+        
+        # Try exact match first
+        if fact in gm.memory:
+            gm.memory.remove(fact)
+        else:
+            # Try partial match (case-insensitive)
+            gm.memory = [m for m in gm.memory if fact.lower() not in m.lower()]
+        
+        if len(gm.memory) < original_count:
+            gm._save()
+            removed = original_count - len(gm.memory)
+            return f"✅ Removed {removed} fact(s) from global memory matching: '{fact}'"
+        else:
+            return f"ℹ️ No matching facts found in memory: '{fact}'"
+    except Exception as exc:
+        return f"❌ Failed to remove from memory: {exc}"
+
+
+def list_memory(ui_mode: bool = False) -> str:
+    """
+    List all facts in global long-term memory.
+
+    Args:
+        ui_mode: If True, skips CLI prompt.
+
+    Returns:
+        Formatted list of all memory facts.
+    """
+    from src.agent.memory.global_memory import GlobalMemory
+    
+    try:
+        gm = GlobalMemory()
+        if not gm.memory:
+            return "Global memory is empty."
+        
+        lines = [f"🧠 Global Memory ({len(gm.memory)} facts):\n"]
+        for i, fact in enumerate(gm.memory, 1):
+            lines.append(f"  {i}. {fact}")
+        
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"❌ Failed to list memory: {exc}"

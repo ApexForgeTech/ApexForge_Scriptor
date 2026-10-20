@@ -38,7 +38,7 @@ from src.tools.read_tools import (
     list_tags,
     list_notes,
 )
-from src.tools.write_tools import create_note, update_note, add_link
+from src.tools.write_tools import create_note, update_note, add_link, add_memory, remove_memory, list_memory
 from src.tools.system_tools import current_time
 
 
